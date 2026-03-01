@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from arviva_agent.desktop_control.gui_interaction import GUICommand, GUIInteraction
 from arviva_agent.executor.tool_adapter import SecureToolAdapter, ToolResult
 from arviva_agent.integrations.superagi_client import SuperAGIClient
-from arviva_agent.planner.planner import PlanStep
+from arviva_agent.prompts.schemas import PlanStep
 
 
 @dataclass
@@ -30,30 +30,27 @@ class Executor:
         self.superagi = superagi or SuperAGIClient()
 
     def execute_step(self, step: PlanStep, goal: str = "") -> StepExecution:
-        if step.tool == "shell":
-            command = step.action if step.action.startswith(("pwd", "ls", "echo")) else "pwd"
+        if step.type == "shell":
+            command = step.command or "pwd"
             result: ToolResult = self.tools.run_shell(command)
             return StepExecution(step_id=step.id, ok=result.ok, output=result.output, error=result.error)
 
-        if step.tool == "python":
-            code = f"print('planner_goal:', {goal!r})"
+        if step.type == "python":
+            code = step.command or f"print('planner_goal:', {goal!r})"
             result = self.tools.run_python(code)
             return StepExecution(step_id=step.id, ok=result.ok, output=result.output, error=result.error)
 
-        if step.tool == "agent_s":
-            action = "screenshot"
-            payload = ""
-            if "click" in step.action.lower():
-                action = "click"
-                payload = "button"
-            elif "type" in step.action.lower():
-                action = "type"
-                payload = goal[:120]
+        if step.type == "agent_s":
+            if step.agent_s_action:
+                action = step.agent_s_action.action
+                payload = step.agent_s_action.target or step.agent_s_action.text
+            else:
+                action, payload = "screenshot", ""
             ok, details = self.gui.execute(GUICommand(action=action, payload=payload))
             return StepExecution(step_id=step.id, ok=ok, output=details, error="" if ok else details)
 
-        if step.tool == "superagi":
-            result = self.superagi.dispatch_workflow(goal=goal or step.action, context={"step": step.action})
+        if step.type == "superagi":
+            result = self.superagi.dispatch_workflow(goal=goal or step.description, context={"step": step.description})
             if result.simulated:
                 return StepExecution(
                     step_id=step.id,
@@ -63,4 +60,4 @@ class Executor:
                 )
             return StepExecution(step_id=step.id, ok=result.ok, output=str(result.data), error=result.error)
 
-        return StepExecution(step_id=step.id, ok=False, output="", error=f"Okänt verktyg: {step.tool}")
+        return StepExecution(step_id=step.id, ok=False, output="", error=f"Okänt verktyg: {step.type}")

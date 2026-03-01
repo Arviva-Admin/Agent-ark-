@@ -30,6 +30,34 @@ python main.py "Automatisera GUI-arbetsflöde och verifiera resultat"
 uvicorn arviva_agent.api.main:app --reload --port 8000
 ```
 
+## Prompt Stack
+Agenten använder en robust prompt-stack:
+- **SYSTEM_POLICY**: guardrails, tool-policy, sekretess och destruktiva kommandon blockeras.
+- **PLANNER**: returnerar strikt JSON-plan med tool-typed steg och verifiering per steg.
+- **CRITIC**: riskbedömer planen och applicerar deterministiska fixar (t.ex. ersätter destruktiva kommandon).
+
+### Exempel på plan-JSON
+```json
+{
+  "goal": "Automatisera deployment",
+  "assumptions": ["Agent-S kan vara simulerad"],
+  "steps": [
+    {
+      "id": 1,
+      "type": "shell",
+      "description": "Verifiera arbetskatalog",
+      "command": "pwd",
+      "agent_s_action": null,
+      "simulated": false,
+      "verify": {"type": "exit_code", "target": "command", "expect": "0"}
+    }
+  ]
+}
+```
+
+### Simulation och fallback
+Om Agent-S eller SuperAGI är otillgängliga planerar/markerar systemet `simulated` och använder fallback till shell/python där möjligt.
+
 ## API
 - `POST /api/agent/run` kör ett mål och returnerar `{status, details}`.
 - `GET /api/agent/status` returnerar `{agent_s, superagi}` med `reachable/mode/url` enligt kontrakt.

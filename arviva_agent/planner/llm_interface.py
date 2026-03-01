@@ -15,11 +15,68 @@ class LLMClient(Protocol):
 
 @dataclass
 class LocalRuleBasedLLM:
+    """Offline fallback that emits strict JSON for planner and critic."""
     """Offline fallback that emits a robust multi-tool plan JSON."""
 
     model_name: str = "local-rule-7b-sim"
 
     def generate(self, prompt: str) -> str:
+        goal = prompt.split("GOAL:", 1)[-1].split("\n", 1)[0].strip() or "okänt mål"
+
+        if "ROLE: PLANNER_JSON_REPAIR" in prompt:
+            plan = self._build_plan(goal)
+            return json.dumps(plan, ensure_ascii=False)
+
+        if "ROLE: CRITIC" in prompt:
+            critic = {"ok": True, "risk_level": "low", "issues": [], "patched_plan": None}
+            return json.dumps(critic, ensure_ascii=False)
+
+        plan = self._build_plan(goal)
+        return json.dumps(plan, ensure_ascii=False)
+
+    def _build_plan(self, goal: str) -> dict[str, object]:
+        return {
+            "goal": goal,
+            "assumptions": ["Lokala fallbackar kan behövas"],
+            "steps": [
+                {
+                    "id": 1,
+                    "type": "python",
+                    "description": "Analysera målet och förbered arbetsplan",
+                    "command": "print('goal analysis')",
+                    "agent_s_action": None,
+                    "simulated": False,
+                    "verify": {"type": "stdout_contains", "target": "stdout", "expect": "goal"},
+                },
+                {
+                    "id": 2,
+                    "type": "superagi",
+                    "description": "Dispatch workflow via SuperAGI",
+                    "command": "dispatch_workflow",
+                    "agent_s_action": None,
+                    "simulated": True,
+                    "verify": {"type": "stdout_contains", "target": "stdout", "expect": "fallback"},
+                },
+                {
+                    "id": 3,
+                    "type": "agent_s",
+                    "description": "Ta screenshot via Agent-S",
+                    "command": "",
+                    "agent_s_action": {"action": "screenshot", "target": "", "text": ""},
+                    "simulated": True,
+                    "verify": {"type": "stdout_contains", "target": "stdout", "expect": "simulated"},
+                },
+                {
+                    "id": 4,
+                    "type": "shell",
+                    "description": "Verifiera lokala artefakter",
+                    "command": "pwd",
+                    "agent_s_action": None,
+                    "simulated": False,
+                    "verify": {"type": "exit_code", "target": "command", "expect": "0"},
+                },
+            ],
+        }
         goal = prompt.split("GOAL:", 1)[-1].strip() or "okänt mål"
         plan = {
             "goal": goal,

@@ -58,7 +58,24 @@ def agent_status() -> AgentStatusResponse:
 def run_agent(request: RunRequest) -> RunResponse:
     """Kör agentloop för ett mål och returnerar strukturerat resultat."""
     try:
-        result = orchestrator.run(goal=request.goal, max_iterations=request.max_iterations)
+        superagi_client = SuperAGIClient()
+        superagi_health = superagi_client.health()
+        integrations_status = {
+            "agent_s": {
+                "reachable": AgentSClient().is_available(),
+                "mode": "real" if AgentSClient().is_available() else "simulated",
+            },
+            "superagi": {
+                "reachable": superagi_health.ok,
+                "mode": "real" if superagi_health.ok else "simulated",
+                "url": superagi_client.base_url,
+            },
+        }
+        result = orchestrator.run(
+            goal=request.goal,
+            max_iterations=request.max_iterations,
+            integrations_status=integrations_status,
+        )
         return RunResponse(
             status="success" if result.status == "completed" else result.status,
             details={
