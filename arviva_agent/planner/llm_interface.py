@@ -1,0 +1,107 @@
+"""LLM-gränssnitt med lokal modell + extern API fallback."""
+
+from __future__ import annotations
+
+import json
+import os
+from dataclasses import dataclass
+from typing import Protocol
+
+
+class LLMClient(Protocol):
+    def generate(self, prompt: str) -> str:
+        ...
+
+
+@dataclass
+class LocalRuleBasedLLM:
+    """Offline fallback that emits strict JSON for planner and critic."""
+
+    model_name: str = "local-rule-7b-sim"
+
+    def generate(self, prompt: str) -> str:
+        goal = prompt.split("GOAL:", 1)[-1].split("\n", 1)[0].strip() or "okänt mål"
+
+        if "ROLE: PLANNER_JSON_REPAIR" in prompt:
+            plan = self._build_plan(goal)
+            return json.dumps(plan, ensure_ascii=False)
+
+        if "ROLE: CRITIC" in prompt:
+            critic = {"ok": True, "risk_level": "low", "issues": [], "patched_plan": None}
+            return json.dumps(critic, ensure_ascii=False)
+
+        plan = self._build_plan(goal)
+        return json.dumps(plan, ensure_ascii=False)
+
+    def _build_plan(self, goal: str) -> dict[str, object]:
+        return {
+            "goal": goal,
+            "assumptions": ["Lokala fallbackar kan behövas"],
+            "steps": [
+                {
+                    "id": 1,
+                    "type": "python",
+                    "description": "Analysera målet och förbered arbetsplan",
+                    "command": "print('goal analysis')",
+                    "agent_s_action": None,
+                    "simulated": False,
+                    "verify": {"type": "stdout_contains", "target": "stdout", "expect": "goal"},
+                },
+                {
+                    "id": 2,
+                    "type": "superagi",
+                    "description": "Dispatch workflow via SuperAGI",
+                    "command": "dispatch_workflow",
+                    "agent_s_action": None,
+                    "simulated": True,
+                    "verify": {"type": "stdout_contains", "target": "stdout", "expect": "fallback"},
+                },
+                {
+                    "id": 3,
+                    "type": "agent_s",
+                    "description": "Ta screenshot via Agent-S",
+                    "command": "",
+                    "agent_s_action": {"action": "screenshot", "target": "", "text": ""},
+                    "simulated": True,
+                    "verify": {"type": "stdout_contains", "target": "stdout", "expect": "simulated"},
+                },
+                {
+                    "id": 4,
+                    "type": "shell",
+                    "description": "Verifiera lokala artefakter",
+                    "command": "pwd",
+                    "agent_s_action": None,
+                    "simulated": False,
+                    "verify": {"type": "exit_code", "target": "command", "expect": "0"},
+                },
+            ],
+        }
+
+
+@dataclass
+class ExternalAPILLM:
+    endpoint: str
+    api_key: str
+    model_name: str
+
+    def generate(self, prompt: str) -> str:
+        import requests
+
+        response = requests.post(
+            self.endpoint,
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            json={"model": self.model_name, "prompt": prompt, "temperature": 0.1},
+            timeout=30,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data.get("text", "")
+
+
+def build_llm_client() -> LLMClient:
+    endpoint = os.getenv("ARVIVA_LLM_ENDPOINT")
+    api_key = os.getenv("ARVIVA_LLM_API_KEY")
+    model = os.getenv("ARVIVA_LLM_MODEL", "local-rule-7b-sim")
+    if endpoint and api_key:
+        return ExternalAPILLM(endpoint=endpoint, api_key=api_key, model_name=model)
+    return LocalRuleBasedLLM(model_name=model)
