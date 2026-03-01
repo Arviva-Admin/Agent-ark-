@@ -20,21 +20,14 @@ class SecureToolAdapter:
     """Kör shell/python med säkerhetspolicy för kommandon."""
 
     def __init__(self, allowlist: set[str] | None = None, denylist: set[str] | None = None, timeout_s: int = 30) -> None:
-        self.allowlist = allowlist or {"echo", "pwd", "ls", "python", "python3", "cat", "test"}
+        self.allowlist = allowlist or {"echo", "pwd", "ls", "python", "python3", "cat"}
         self.denylist = denylist or {"rm", "shutdown", "reboot", "mkfs", "dd"}
-        self.blocked_fragments = ["rm -rf", "mkfs", "shutdown", "reboot", "dd if=", "chmod 777 /", ":(){:|:&};:"]
         self.timeout_s = timeout_s
 
     def _validate(self, command: str) -> tuple[bool, str]:
-        lower = command.lower()
-        for fragment in self.blocked_fragments:
-            if fragment in lower:
-                return False, f"Kommando blockerat av policy: {fragment}"
-
         args = shlex.split(command)
         if not args:
             return False, "Tomt kommando"
-
         binary = Path(args[0]).name
         if binary in self.denylist:
             return False, f"Kommando blockerat: {binary}"

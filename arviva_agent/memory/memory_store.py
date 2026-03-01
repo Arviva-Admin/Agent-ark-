@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -14,7 +14,6 @@ from arviva_agent.memory.vector_store import VectorItem, VectorStore
 @dataclass
 class MemoryStore:
     path: Path = Path("data/agent_history.jsonl")
-    events: list[dict[str, Any]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -26,14 +25,11 @@ class MemoryStore:
             "event_type": event_type,
             "payload": payload,
         }
-        self.events.append(entry)
         with self.path.open("a", encoding="utf-8") as file:
             file.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
-    def recent_events(self, limit: int = 10) -> list[dict[str, Any]]:
-        return self.events[-limit:]
-
     def embed_and_store(self, key: str, text: str, payload: dict[str, Any]) -> None:
+        # Superenkel "embedding": normaliserad teckenfrekvens för testbar offline-körning.
         vec = [0.0] * 8
         for char in text.lower():
             vec[ord(char) % 8] += 1.0

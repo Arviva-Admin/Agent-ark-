@@ -16,6 +16,7 @@ class LLMClient(Protocol):
 @dataclass
 class LocalRuleBasedLLM:
     """Offline fallback that emits strict JSON for planner and critic."""
+    """Offline fallback that emits a robust multi-tool plan JSON."""
 
     model_name: str = "local-rule-7b-sim"
 
@@ -76,6 +77,17 @@ class LocalRuleBasedLLM:
                 },
             ],
         }
+        goal = prompt.split("GOAL:", 1)[-1].strip() or "okänt mål"
+        plan = {
+            "goal": goal,
+            "steps": [
+                {"id": 1, "type": "decompose", "action": "Analysera mål och delmål", "tool": "python"},
+                {"id": 2, "type": "orchestrate", "action": "Starta SuperAGI workflow", "tool": "superagi"},
+                {"id": 3, "type": "act_gui", "action": "Ta screenshot via Agent-S", "tool": "agent_s"},
+                {"id": 4, "type": "verify", "action": "Verifiera artefakter lokalt", "tool": "shell"},
+            ],
+        }
+        return json.dumps(plan, ensure_ascii=False)
 
 
 @dataclass

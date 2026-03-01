@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from arviva_agent.executor.executor import StepExecution
 from arviva_agent.prompts.schemas import PlanStep
+from arviva_agent.planner.planner import PlanStep
 
 
 @dataclass
@@ -32,3 +33,6 @@ class Verifier:
             return VerificationResult(ok=True, message=f"Steg {step.id} verifierat via {verify_type}")
 
         return VerificationResult(ok=False, message=f"Steg {step.id} uppfyllde inte verify-krav")
+        if not execution.output.strip():
+            return VerificationResult(ok=False, message=f"Steg {step.id} gav tom output")
+        return VerificationResult(ok=True, message=f"Steg {step.id} verifierat")
