@@ -1,0 +1,113 @@
+openapi: 3.0.3
+info:
+  title: Arviva Agent API
+  version: "1.0.0"
+  description: |
+    API för Arviva-agenten inklusive statuskontroller
+    för Agent-S och SuperAGI samt körning av mål.
+
+servers:
+  - url: http://localhost:8000
+    description: Lokal utvecklingsserver
+
+paths:
+  /api/agent/status:
+    get:
+      summary: Hämta status för agentintegrationer
+      tags:
+        - Agent Status
+      responses:
+        '200':
+          description: Statusinformation för Agent-S och SuperAGI
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agent_s:
+                    type: object
+                    description: Status för Agent-S-integration
+                    properties:
+                      reachable:
+                        type: boolean
+                        description: Om Agent-S är reachable
+                        example: false
+                      mode:
+                        type: string
+                        description: real eller simulated
+                        example: "simulated"
+                  superagi:
+                    type: object
+                    description: Status för SuperAGI-integration
+                    properties:
+                      reachable:
+                        type: boolean
+                        description: Om SuperAGI är reachable
+                        example: true
+                      url:
+                        type: string
+                        description: SuperAGI base URL
+                        example: "http://localhost:3000"
+
+  /api/agent/run:
+    post:
+      summary: Kör agentmål
+      tags:
+        - Agent Control
+      requestBody:
+        description: Mål i naturligt språk och optional iterationsgräns
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                goal:
+                  type: string
+                  description: Mål som agenten ska bearbeta
+                  example: "Automatisera deployment"
+                max_iterations:
+                  type: integer
+                  description: Max antal iterationer i agentloopen
+                  example: 10
+      responses:
+        '200':
+          description: Resultat från agentkörning
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    description: sammanfattande status
+                    example: "success"
+                  details:
+                    type: object
+                    description: detaljer om körning/utdata
+        '400':
+          description: Validerings- eller requestfel
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Serverfel under agentkörning
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Felmeddelande
+          example: "Invalid request body"
+        code:
+          type: integer
+          description: Felkod
+          example: 400
